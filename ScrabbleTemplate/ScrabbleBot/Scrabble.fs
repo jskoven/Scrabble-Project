@@ -50,6 +50,8 @@ module State =
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
+        
+        tilesOnBoard  : Map<(uint32*uint32), option<(char*uint32)>>
     }
 
     let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
