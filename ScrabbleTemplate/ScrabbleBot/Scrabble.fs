@@ -42,6 +42,10 @@ module State =
     // information, such as number of players, player turn, etc.
 
     type state = {
+        //We can (and should) add stuff we wish to keep track of in here. Lasse for example mentioned
+        //that his group added a way to keep track of already placed tiles in here (which of course
+        //is needed). He said his was mostly just a coordinate system, being an x,y system and
+        //whichever tile is places.
         board         : Parser.board
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
@@ -59,8 +63,10 @@ module Scrabble =
     open System.Threading
 
     let playGame cstream pieces (st : State.state) =
-
+    //Playgame is called at start. St is the players state, which must be updated based on what
+    //happens, what is played, etc
         let rec aux (st : State.state) =
+            //Aux is called again and again
             Print.printHand pieces (State.hand st)
 
             // remove the force print when you move on from manual input (or when you have learnt the format)
@@ -75,6 +81,9 @@ module Scrabble =
             debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
             match msg with
+            //Msg is the answer from the server after a given play. For each possible answer, some
+            //the player state must be updated in order to make sure that the state we have
+            //on our pc reflects the state which is on the server.
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
                 let st' = st // This state needs to be updated
@@ -97,10 +106,12 @@ module Scrabble =
     let startGame 
             (boardP : boardProg) 
             (dictf : bool -> Dictionary.Dict) 
-            (numPlayers : uint32) 
+            (numPlayers : uint32)
             (playerNumber : uint32) 
             (playerTurn  : uint32) 
             (hand : (uint32 * uint32) list)
+            //Hand er muligvis tal men faktisk bogstaver. As in, 0 er f.eks. A, 1 er B osv.
+            //Ikke sikkert men maybe.
             (tiles : Map<uint32, tile>)
             (timeout : uint32 option) 
             (cstream : Stream) =
