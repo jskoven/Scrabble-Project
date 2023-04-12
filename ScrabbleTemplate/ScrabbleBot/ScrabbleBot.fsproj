@@ -18,6 +18,7 @@
     <Compile Include="Scrabble.fs" />
     <Compile Include="Dict.fsi" />
     <Compile Include="Dict.fs" />
+    <Compile Include="Types.fs" />
   </ItemGroup>
 
   <ItemGroup>
