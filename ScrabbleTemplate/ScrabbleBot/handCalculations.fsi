@@ -3,5 +3,5 @@ open Types
 open MultiSet
 
 
-    val removePieces : placedWord -> MultiSet<(int * int) * (uint32 * placedTile)> -> MultiSet<(int * int) * (uint32 * placedTile)>
+    val removePieces : uint32 list -> MultiSet<uint32> -> MultiSet<uint32>
     val addPieces : (uint32 * uint32) list -> MultiSet<uint32> -> MultiSet<uint32>

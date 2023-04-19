@@ -1,10 +1,12 @@
 ﻿namespace YourClientName
 
+open ScrabbleBot
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 open System.IO
 open Types
-
+open handCalculations
+open boardCalculations
 open ScrabbleUtil.DebugPrint
 
 // The RegEx module is only used to parse human input. It is not used for the final product.
@@ -68,10 +70,11 @@ module State =
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
     
-    
 
 module Scrabble =
     open System.Threading
+    let getIDs (word: placedWord) =
+        List.fold (fun acc (_, (id, (_, _))) -> id :: acc) [] word     
 
     let playGame cstream pieces (st : State.state) =
     //Playgame is called at start. St is the players state, which must be updated based on what
@@ -96,16 +99,20 @@ module Scrabble =
             //the player state must be updated in order to make sure that the state we have
             //on our pc reflects the state which is on the server.
             | RCM (CMPlaySuccess(ms, points, newPieces)) ->
-                (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *)
-                let st' = st // This state needs to be updated
+                (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *) 
+                let newHand = removePieces (getIDs ms) st.hand |> addPieces newPieces
+                let newBoard = updateTilesOnBoard st.tilesOnBoard ms
+                let st' = {st with hand = newHand; tilesOnBoard = newBoard}
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
-                let st' = st // This state needs to be updated
+                let newBoard = updateTilesOnBoard st.tilesOnBoard ms
+                let st' = {st with tilesOnBoard = newBoard}
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
-                let st' = st // This state needs to be updated
+                let newBoard = updateTilesOnBoard st.tilesOnBoard ms
+                let st' = {st with tilesOnBoard = newBoard}
                 aux st'
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
