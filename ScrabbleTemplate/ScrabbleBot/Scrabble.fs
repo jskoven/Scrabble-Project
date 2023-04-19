@@ -57,7 +57,7 @@ module State =
         tilesOnBoard  : Map<(uint32*uint32), option<(char*uint32)>>
     }
 
-    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
+    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h; tilesOnBoard = Map.empty }
 
     let board st         = st.board
     let dict st          = st.dict

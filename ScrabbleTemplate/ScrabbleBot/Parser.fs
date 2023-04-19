@@ -56,20 +56,37 @@ module internal Parser
     let TermParse, tref = createParserForwardedToRef<aExp>()
     let ProdParse, pref = createParserForwardedToRef<aExp>()
     let AtomParse, aref = createParserForwardedToRef<aExp>()
+    let CTermParse, cref = createParserForwardedToRef<cExp>()
 
     let AddParse = binop (pchar '+') ProdParse TermParse |>> Add <?> "Add"
-    do tref := choice [AddParse; ProdParse]
+    let SubParse = binop (pchar '-') ProdParse TermParse |>> Sub <?> "Sub"
+    do tref := choice [AddParse; SubParse; ProdParse]
 
     let MulParse = binop (pchar '*') AtomParse ProdParse |>> Mul <?> "Mul"
-    do pref := choice [MulParse; AtomParse]
+    let DivParse = binop (pchar '/') AtomParse ProdParse |>> Div <?> "Div"
+    let ModParse = binop (pchar '%') AtomParse ProdParse |>> Mod <?> "Mod"
+    do pref := choice [DivParse; MulParse; ModParse; AtomParse]
 
     let NParse   = pint32 |>> N <?> "Int"
-    let ParParse = parenthesise TermParse
-    do aref := choice [NParse; ParParse]
+    let VParse = pid |>> V <?> "V"
+    let PVParse = unop pPointValue AtomParse |>> PV <?> "PV"
+    let NegParse = unop (pchar '-') AtomParse |>> (fun x -> (N -1, x)) |>> Mul <?> "Neg"
+    let CharToIntParse = pCharToInt >*>. parenthesise CTermParse |>> CharToInt <?> "CharToInt"
+    let ParParse = parenthesise TermParse <?> "parenthesise"
+    
+    do aref := choice [NegParse; NParse; ParParse; PVParse; CharToIntParse; VParse]
 
     let AexpParse = TermParse 
 
-    let CexpParse = pstring "not implemented"
+    let CParse = pchar ''' >>. anyChar .>> pchar ''' |>> C <?> "C"
+    let CVParse = unop pCharValue AexpParse |>> CV <?> "CV"
+    let CToUpperParse = pToUpper >*>. parenthesise CTermParse |>> ToUpper <?> "toUpper"
+    let CToLowerParse = pToLower >*>. parenthesise CTermParse |>> ToLower <?> "toLower"   
+    let CIntToCharParse = pIntToChar >*>. parenthesise AexpParse |>> IntToChar <?> "IntToChar"
+    
+    do cref.Value <- choice [CParse; CToUpperParse; CToLowerParse; CVParse; CIntToCharParse]
+    
+    let CexpParse = CTermParse
 
     let BexpParse = pstring "not implemented"
 
