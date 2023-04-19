@@ -9,7 +9,9 @@ open StateMonad
     
     type square = Map<int, squareFun>
     
-    type tile = char * int
+    type placedTile = char * int
+    
+    type placedWord = (coord * (uint32 * placedTile)) list
     
     type boardFun = coord -> Result<square option, Error>
     

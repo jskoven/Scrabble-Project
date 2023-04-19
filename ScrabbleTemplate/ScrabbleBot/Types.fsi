@@ -8,5 +8,6 @@ module Types
             | ReservedName of string
     type word = (char * int) list
     type squareFun = word -> int -> int -> Result<int, Error>
-    type tile = char * int
+    type placedTile = char * int
     type square = Map<int, squareFun>
+    type placedWord = ((int * int) * (uint32 * placedTile)) list

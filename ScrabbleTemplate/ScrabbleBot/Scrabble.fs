@@ -40,7 +40,8 @@ module State =
     // Currently, it only keeps track of your hand, your player numer, your board, and your dictionary,
     // but it could, potentially, keep track of other useful
     // information, such as number of players, player turn, etc.
-
+    open Types
+    
     type state = {
         //We can (and should) add stuff we wish to keep track of in here. Lasse for example mentioned
         //that his group added a way to keep track of already placed tiles in here (which of course
@@ -54,15 +55,19 @@ module State =
         // value is option<chartype*square> where chartype is a type we need to define ourself.
         // We need to define it such that char contains both the current char but also said char's
         // point value.
-        tilesOnBoard  : Map<(coord), option<(tile*square)>>
+        tilesOnBoard  : Map<coord, placedTile>
+        //Tilføj new pieces, tilføj tilesonboard
+        tiles         : Map<uint32, tile>
     }
 
-    let mkState b d pn h = {board = b; dict = d;  playerNumber = pn; hand = h }
+    let mkState b d pn h t = {board = b; dict = d; playerNumber = pn; hand = h; tilesOnBoard = Map.empty; tiles = t }
 
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
     let hand st          = st.hand
+    
+    
 
 module Scrabble =
     open System.Threading
@@ -134,5 +139,5 @@ module Scrabble =
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet)
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet tiles)
         
