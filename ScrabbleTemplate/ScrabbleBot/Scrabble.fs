@@ -62,6 +62,7 @@ module State =
 
     let mkState b d pn h t = {board = b; dict = d; playerNumber = pn; hand = h; tilesOnBoard = Map.empty; tiles = t }
 
+
     let board st         = st.board
     let dict st          = st.dict
     let playerNumber st  = st.playerNumber
