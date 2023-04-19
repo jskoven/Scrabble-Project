@@ -50,7 +50,10 @@ module State =
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
         hand          : MultiSet.MultiSet<uint32>
-        
+        // Use the types.fs types in the map, such that the key is a coord type, and the
+        // value is option<chartype,square> where chartype is a type we need to define ourself.
+        // We need to define it such that char contains both the current char but also said char's
+        //point value.
         tilesOnBoard  : Map<(uint32*uint32), option<(char*uint32)>>
     }
 
