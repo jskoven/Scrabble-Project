@@ -10,7 +10,7 @@ module internal MultiSet
         let contains a (M s) = Map.containsKey a s
         let numItems a (M s) = Map.tryFind a s |> Option.defaultValue 0u
         
-        let add a  n (M s) = if contains a (M s) then M (Map.add a (n+(Map.find a s)) s) else M (Map.add a n s)
+        let add a n (M s) = if contains a (M s) then M (Map.add a (n+(Map.find a s)) s) else M (Map.add a n s)
         let addSingle a (M s) = if contains a (M s) then M (Map.add a ((Map.find a s) + 1u) s) else M (Map.add a 1u s)
         let remove a n (M s) =
             match n with
