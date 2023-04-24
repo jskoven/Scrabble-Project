@@ -71,8 +71,17 @@ module State =
     let hand st          = st.hand
     
 
+
 module Scrabble =
     open System.Threading
+    open State
+    open Dict
+    open MultiSet
+    
+    
+        
+        
+        
     let getIDs (word: placedWord) =
         List.fold (fun acc (_, (id, (_, _))) -> id :: acc) [] word     
 
@@ -80,6 +89,38 @@ module Scrabble =
     //Playgame is called at start. St is the players state, which must be updated based on what
     //happens, what is played, etc
         let rec aux (st : State.state) =
+            
+            let calculateMove (currentState: state) (lastMove) (dict: Dict)=
+                let playerHand = currentState.hand
+                let tilesOnBoard = currentState.tilesOnBoard
+                
+                // Husk også at få fat i koordinater somehow.
+                // Hvis man starter med at spille, starter man på 0,0
+                // Hvis man ikke starter, så skal funktionen have den koordinat på den tile
+                // man starter med at bygge, med i funktionen. Man skal også huske at
+                // så plusse / minusse x,y koordinaterne efter hvilken retning man går
+                // (TA'en nævnte at de havde en direction variabel eller sådan noget)
+                
+                let rec checkmove hand =
+                    MultiSet.fold
+                        (fun acc key amount->
+                            (let actualTile = Map.find key pieces
+                             let isWord = step actualTile dict
+                             let tempCharacterList = MultiSet.removeSingle key hand
+                             match isWord with
+                             |Some (true, d) -> acc
+                             |Some (false, d) -> acc @ (checkmove tempCharacterList)
+                             |_ -> checkmove tempCharacterList
+                             )
+                        )
+                        List.empty hand
+                
+                checkmove playerHand
+            
+                    
+                
+                
+                
             //Aux is called again and again
             Print.printHand pieces (State.hand st)
 

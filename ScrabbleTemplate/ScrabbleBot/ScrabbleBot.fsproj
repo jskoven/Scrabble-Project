@@ -16,14 +16,14 @@
     <Compile Include="Eval.fs" />
     <Compile Include="Parser.fsi" />
     <Compile Include="Parser.fs" />
+    <Compile Include="Dict.fsi" />
+    <Compile Include="Dict.fs" />
     <Compile Include="handCalculations.fsi" />
     <Compile Include="handCalculations.fs" />
     <Compile Include="boardCalculations.fsi" />
     <Compile Include="boardCalculations.fs" />
     <Compile Include="Scrabble.fsi" />
     <Compile Include="Scrabble.fs" />
-    <Compile Include="Dict.fsi" />
-    <Compile Include="Dict.fs" />
   </ItemGroup>
 
   <ItemGroup>

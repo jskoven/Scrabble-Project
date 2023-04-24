@@ -22,7 +22,7 @@ module internal MultiSet
                                     elif (Map.find a s) > 0u then M (Map.add a (Map.find a s - 1u) s)
                                     else M s
                                     
-        let fold f acc (M s) = Map.fold f acc s                
+        let fold f acc (M s) = Map.fold f acc s
         let foldBack f (M s) acc = Map.foldBack f s acc
         
         let ofList (lst:'a list) = List.fold(fun acc elem -> addSingle elem acc) empty lst
