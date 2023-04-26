@@ -1,5 +1,7 @@
 
-module Types
+module internal ScrabbleBot.Types
+
+    open StateMonad
     type Error = 
             | VarExists of string
             | VarNotFound of string

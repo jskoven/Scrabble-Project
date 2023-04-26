@@ -1,5 +1,6 @@
 ﻿namespace YourClientName
 
+open System
 open ScrabbleBot
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
@@ -52,6 +53,7 @@ module State =
         board         : Parser.board
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
+        myPoints      : uint32
         hand          : MultiSet.MultiSet<uint32>
         // Use the types.fs types in the map, such that the key is a coord type, and the
         // value is option<chartype*square> where chartype is a type we need to define ourself.
@@ -62,7 +64,7 @@ module State =
         tiles         : Map<uint32, tile>
     }
 
-    let mkState b d pn h t = {board = b; dict = d; playerNumber = pn; hand = h; tilesOnBoard = Map.empty; tiles = t }
+    let mkState b d pn h t = {board = b; dict = d; playerNumber = pn; myPoints = 0u; hand = h; tilesOnBoard = Map.empty; tiles = t }
 
 
     let board st         = st.board
@@ -102,7 +104,10 @@ module Scrabble =
                 (* Successful play by you. Update your state (remove old tiles, add the new ones, change turn, etc) *) 
                 let newHand = removePieces (getIDs ms) st.hand |> addPieces newPieces
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
-                let st' = {st with hand = newHand; tilesOnBoard = newBoard}
+                
+                let newPoints = st.myPoints + uint32 points
+                printfn "Your points are:%A" newPoints 
+                let st' = {st with hand = newHand; tilesOnBoard = newBoard; myPoints = newPoints}
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
