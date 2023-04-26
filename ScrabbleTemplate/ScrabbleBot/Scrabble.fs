@@ -53,6 +53,9 @@ module State =
         board         : Parser.board
         dict          : ScrabbleUtil.Dictionary.Dict
         playerNumber  : uint32
+        playerTurn    : uint32
+        nrOfTurns     : uint32
+        nrOfPlayers   : uint32
         myPoints      : uint32
         hand          : MultiSet.MultiSet<uint32>
         // Use the types.fs types in the map, such that the key is a coord type, and the
@@ -64,7 +67,7 @@ module State =
         tiles         : Map<uint32, tile>
     }
 
-    let mkState b d pn h t = {board = b; dict = d; playerNumber = pn; myPoints = 0u; hand = h; tilesOnBoard = Map.empty; tiles = t }
+    let mkState b d pn h t pt nop = {board = b; dict = d; playerNumber = pn; myPoints = 0u; hand = h; tilesOnBoard = Map.empty; tiles = t; nrOfTurns = 0u; playerTurn = pt; nrOfPlayers = nop }
 
 
     let board st         = st.board
@@ -75,6 +78,10 @@ module State =
 
 module Scrabble =
     open System.Threading
+        let updatePlayerTurn (playerTurn : uint32) (nrOfPlayers : uint32) =
+        if playerTurn+1u > nrOfPlayers
+            then 1u
+            else playerTurn+1u
     let getIDs (word: placedWord) =
         List.fold (fun acc (_, (id, (_, _))) -> id :: acc) [] word     
 
@@ -82,20 +89,23 @@ module Scrabble =
     //Playgame is called at start. St is the players state, which must be updated based on what
     //happens, what is played, etc
         let rec aux (st : State.state) =
-            //Aux is called again and again
-            Print.printHand pieces (State.hand st)
+            if st.playerNumber = st.playerTurn then 
+                DebugPrint.forcePrint (sprintf "player %A's turn\n" st.playerNumber) 
+                //Aux is called again and again
+                Print.printHand pieces (State.hand st)
 
-            // remove the force print when you move on from manual input (or when you have learnt the format)
-            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            let input =  System.Console.ReadLine()
-            let move = RegEx.parseMove input
+                // remove the force print when you move on from manual input (or when you have learnt the format)
+                forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+                let input =  System.Console.ReadLine()
+                let move = RegEx.parseMove input
 
-            debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-            send cstream (SMPlay move)
+                debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+                send cstream (SMPlay move)
 
             let msg = recv cstream
-            debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-
+            
+            //debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
+            
             match msg with
             //Msg is the answer from the server after a given play. For each possible answer, some
             //the player state must be updated in order to make sure that the state we have
@@ -107,17 +117,17 @@ module Scrabble =
                 
                 let newPoints = st.myPoints + uint32 points
                 printfn "Your points are:%A" newPoints 
-                let st' = {st with hand = newHand; tilesOnBoard = newBoard; myPoints = newPoints}
+                let st' = {st with hand = newHand; tilesOnBoard = newBoard; myPoints = newPoints; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers }
                 aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
-                let st' = {st with tilesOnBoard = newBoard}
+                let st' = {st with tilesOnBoard = newBoard; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
                 aux st'
             | RCM (CMPlayFailed (pid, ms)) ->
                 (* Failed play. Update your state *)
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
-                let st' = {st with tilesOnBoard = newBoard}
+                let st' = {st with tilesOnBoard = newBoard; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
                 aux st'
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
@@ -152,5 +162,5 @@ module Scrabble =
                   
         let handSet = List.fold (fun acc (x, k) -> MultiSet.add x k acc) MultiSet.empty hand
 
-        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet tiles)
+        fun () -> playGame cstream tiles (State.mkState board dict playerNumber handSet tiles playerTurn numPlayers)
         
