@@ -108,7 +108,7 @@ module Scrabble =
     let rec findLeftMostTile (x,y) (tiles: Map<coord, placedTile>) =
         match Map.tryFind (x-1,y) tiles with
         | Some (cv, pv) -> findLeftMostTile (x-1,y) tiles
-        | None -> (x,y)
+        | None -> (x+1,y)
         
     let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar=
         //Need to add original tile that we are "checking from" in here as well.
@@ -232,23 +232,9 @@ module Scrabble =
             
             //let input =  System.Console.ReadLine()
             //let move = RegEx.parseMove input
-            let move =
-                match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
-                |Some(coord) -> moveFromCoord coord Right st
-                |None -> moveFromCoord (0,0) Right st
-                
-            let move = match lookup (placedWordToWord move) st.dict with
-                        |true -> move
-                        |false ->
-                            match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
-                                |Some(coord) -> moveFromCoord coord Down st
-                                |None -> moveFromCoord (0,0) Down st
+         
             
-            let move = match lookup (placedWordToWord move) st.dict with
-                        |true -> move
-                        |false -> []
-            
-            
+        
             
             //let move = moveFromCoord (0,0) Right st
             
@@ -256,8 +242,6 @@ module Scrabble =
             //let move = moveFromCoord (0,0) Right st
             //forcePrint (sprintf "\n ####  In hands :   %A ####\n" st.hand)
             //forcePrint (sprintf "\n ####  Attempted move :  %A ####\n" move)
-            debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-            send cstream (SMPlay move)
 
             let msg = recv cstream
             
