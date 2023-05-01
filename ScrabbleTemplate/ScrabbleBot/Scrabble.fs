@@ -95,7 +95,7 @@ module Scrabble =
     let nextCoord (x,y) direction =
         match direction with
         |Right -> (x+1,y)
-        |Down -> (x, y-1)
+        |Down -> (x, y+1)
         
     let checkLeftAndRight (x,y) (tiles: Map<coord, placedTile>) =
         match Map.tryFind (x-1,y) tiles with
@@ -110,15 +110,22 @@ module Scrabble =
         | Some (cv, pv) -> findLeftMostTile (x-1,y) tiles
         | None -> (x,y)
         
-    let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict)=
-        //Need to add original tile that we are "checking from" in here as well. 
-        match Map.tryFind (x,y) tiles with
-        | Some (cv, pv) ->
-            match step cv dict with
-            | None -> false
-            | Some (b, child) ->
-                isHorizontalLineWord (x+1,y) tiles child
-        | None -> true
+    let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar=
+        //Need to add original tile that we are "checking from" in here as well.
+        match (x,y) with
+        |(x,y) when (x,y) = originalCoord ->
+            match step originalChar dict with
+                | None -> false
+                | Some (b, child) ->
+                    isHorizontalLineWord (x+1,y) tiles child originalCoord originalChar
+        |(_,_) ->
+            match Map.tryFind (x,y) tiles with
+            | Some (cv, pv) ->
+                match step cv dict with
+                | None -> false
+                | Some (b, child) ->
+                    isHorizontalLineWord (x+1,y) tiles child originalCoord originalChar
+            | None -> true
 
     let rec placedWordToWord (placeWord: (coord * (uint32 * (char * int))) list) =
         List.fold (fun acc (_,(_,(c,_))) -> acc + (string c)) "" placeWord
@@ -148,7 +155,29 @@ module Scrabble =
                     let (cv, pv) = Map.find id st.tiles |> Set.minElement
               
                     // Todo: se om vi kan ligge den brik på det omvendte led !!!
-                   
+                    let isNexto = checkLeftAndRight coord st.tilesOnBoard
+                    match isNexto with
+                    |true ->
+                        let leftMost = findLeftMostTile coord st.tilesOnBoard
+                        let isWord = isHorizontalLineWord leftMost st.tilesOnBoard dict coord cv
+                        match isWord with
+                        |false -> best'
+                        |true ->
+                            match step cv dict with
+                            //Cant step, use best'
+                            | None -> best'
+                            //can step
+                            | Some (b, child) ->
+                                //Remove said tile from hand for next recursive call
+                                //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
+                                let newHand = MultiSet.removeSingle id hand
+                                //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
+                                //Add tile to acc
+                                let newAcc = List.append acc [(coord, (id, (cv, pv)))]
+                                //Check if better than current best
+                                let newBest = if b then bestWord best' newAcc else best'
+                                aux newBest newAcc (nextCoord coord dir) newHand child
+                    |false ->
                     //Check if we can step with each of our tiles in hand
                     match MultiSet.containsValue id hand with
                         |true -> 
