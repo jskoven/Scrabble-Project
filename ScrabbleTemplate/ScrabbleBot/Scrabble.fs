@@ -96,14 +96,27 @@ module Scrabble =
         match direction with
         |Right -> (x+1,y)
         |Down -> (x, y+1)
-        
-    let checkLeftAndRight (x,y) (tiles: Map<coord, placedTile>) =
-        match Map.tryFind (x-1,y) tiles with
-        | Some (cv, pv) -> true
-        | None ->
-            match Map.tryFind (x+1,y) tiles with
+      
+    let prevCoord (x,y) direction =
+        match direction with
+        |Right -> (x-1,y)
+        |Down -> (x, y-1)  
+    let checkAdjecent (x,y) (tiles: Map<coord, placedTile>) dir =
+        match dir with
+        |Right -> 
+            match Map.tryFind (x-1,y) tiles with
             | Some (cv, pv) -> true
-            | None -> false
+            | None ->
+                match Map.tryFind (x+1,y) tiles with
+                | Some (cv, pv) -> true
+                | None -> false
+        |Down ->
+            match Map.tryFind (x,y-1) tiles with
+            | Some (cv, pv) -> true
+            | None ->
+                match Map.tryFind (x,y+1) tiles with
+                | Some (cv, pv) -> true
+                | None -> false
 
     let rec findLeftMostTile (x,y) (tiles: Map<coord, placedTile>) =
         match Map.tryFind (x-1,y) tiles with
@@ -139,45 +152,24 @@ module Scrabble =
             match Map.tryFind coord st.tilesOnBoard with
             //A tile is there
             | Some (cv, pv) ->
-                forcePrint (sprintf "Found on board value: %A \n" cv)
-                //See if we can step further in our dict with that tile
-                match step cv dict with
-                //Cant, return best (?)
-                    | None -> best
-                //Can, check if it's a word. If it is, check if better than current best word.
-                    | Some (b, child) ->
-                        let newBest = if b then bestWord best acc else best
-                        aux newBest acc (nextCoord coord dir) hand child
+                match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
+                |Some (cv,pv) -> best
+                |None -> 
+                    //See if we can step further in our dict with that tile
+                    match step cv dict with
+                    //Cant, return best (?)
+                        | None -> best
+                    //Can, check if it's a word. If it is, check if better than current best word.
+                        | Some (b, child) ->
+                            let newBest = if b then bestWord best acc else best
+                            aux newBest acc (nextCoord coord dir) hand child
             //No tile present, fold over hand
             | None ->
                 MultiSet.fold (fun best' id _ ->
                     // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
                     let (cv, pv) = Map.find id st.tiles |> Set.minElement
               
-                    // Todo: se om vi kan ligge den brik på det omvendte led !!!
-                    let isNexto = checkLeftAndRight coord st.tilesOnBoard
-                    match isNexto with
-                    |true ->
-                        let leftMost = findLeftMostTile coord st.tilesOnBoard
-                        let isWord = isHorizontalLineWord leftMost st.tilesOnBoard dict coord cv
-                        match isWord with
-                        |false -> best'
-                        |true ->
-                            match step cv dict with
-                            //Cant step, use best'
-                            | None -> best'
-                            //can step
-                            | Some (b, child) ->
-                                //Remove said tile from hand for next recursive call
-                                //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
-                                let newHand = MultiSet.removeSingle id hand
-                                //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
-                                //Add tile to acc
-                                let newAcc = List.append acc [(coord, (id, (cv, pv)))]
-                                //Check if better than current best
-                                let newBest = if b then bestWord best' newAcc else best'
-                                aux newBest newAcc (nextCoord coord dir) newHand child
-                    |false ->
+                    // Todo: se om vi kan ligge den brik på det omvendte led
                     //Check if we can step with each of our tiles in hand
                     match MultiSet.containsValue id hand with
                         |true -> 
