@@ -8,6 +8,11 @@ module internal MultiSet
         let size (M s) = Map.fold(fun acc _ elem -> acc+ elem) 0u s
         let isEmpty (M s) = size (M s) = 0u
         let contains a (M s) = Map.containsKey a s
+        
+        let containsValue a (M s) =
+            match Map.tryFind a s with
+            |Some(0u) -> false
+            |_ -> true
         let numItems a (M s) = Map.tryFind a s |> Option.defaultValue 0u
         
         let add a n (M s) = if contains a (M s) then M (Map.add a (n+(Map.find a s)) s) else M (Map.add a n s)
@@ -22,7 +27,7 @@ module internal MultiSet
                                     elif (Map.find a s) > 0u then M (Map.add a (Map.find a s - 1u) s)
                                     else M s
                                     
-        let fold f acc (M s) = Map.fold f acc s                
+        let fold f acc (M s) = Map.fold f acc s
         let foldBack f (M s) acc = Map.foldBack f s acc
         
         let ofList (lst:'a list) = List.fold(fun acc elem -> addSingle elem acc) empty lst
