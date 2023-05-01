@@ -1,7 +1,12 @@
 module internal ScrabbleBot.Types
 
 open StateMonad
-    
+    type Error = 
+            | VarExists of string
+            | VarNotFound of string
+            | IndexOutOfBounds of int
+            | DivisionByZero 
+            | ReservedName of string
     type coord  = int * int 
     type word   = (char * int) list
     

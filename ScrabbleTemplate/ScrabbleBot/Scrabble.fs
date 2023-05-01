@@ -1,4 +1,4 @@
-﻿namespace YourClientName
+﻿namespace JohnBuks
 
 open ScrabbleBot
 open ScrabbleUtil
@@ -102,6 +102,7 @@ module Scrabble =
         | None -> (x,y)
         
     let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict)=
+        //Need to add original tile that we are "checking from" in here as well. 
         match Map.tryFind (x,y) tiles with
         | Some (cv, pv) ->
             match step cv dict with
@@ -110,49 +111,53 @@ module Scrabble =
                 isHorizontalLineWord (x+1,y) tiles child
         | None -> true
 
+    let rec placedWordToWord (placeWord: (coord * (uint32 * (char * int))) list) =
+        List.fold (fun acc (_,(_,(c,_))) -> acc + (string c)) "" placeWord
 
     
     let bestWord word1 word2 =
         if List.length word1 > List.length word2 then word1 else word2
-        
     let moveFromCoord c dir (st : state) =
         let rec aux best acc coord hand dict =
             //Tryfind on the coord with tilesonboard
             match Map.tryFind coord st.tilesOnBoard with
             //A tile is there
             | Some (cv, pv) ->
+                forcePrint (sprintf "Found on board value: %A \n" cv)
                 //See if we can step further in our dict with that tile
                 match step cv dict with
                 //Cant, return best (?)
-                | None -> best
+                    | None -> best
                 //Can, check if it's a word. If it is, check if better than current best word.
-                | Some (b, child) ->
-                    let newBest = if b then bestWord best acc else best
-                    aux newBest acc (nextCoord coord dir) hand child
+                    | Some (b, child) ->
+                        let newBest = if b then bestWord best acc else best
+                        aux newBest acc (nextCoord coord dir) hand child
             //No tile present, fold over hand
             | None ->
                 MultiSet.fold (fun best' id _ ->
                     // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
                     let (cv, pv) = Map.find id st.tiles |> Set.minElement
-                    
+              
                     // Todo: se om vi kan ligge den brik på det omvendte led !!!
-                    // Husk screenshot på mobilen til det. Hvis vi spiller et sæt et brikker, skal vi også se
-                    // om et ord kan spilles på den omvendte led hvis der er andre brikker der "rører" ved det
-                    //vi har spillet.
-                    
+                   
                     //Check if we can step with each of our tiles in hand
-                    match step cv dict with
-                    //Cant step, use best'
-                    | None -> best'
-                    //can step
-                    | Some (b, child) ->
-                        //Remove said tile from hand for next recursive call
-                        let newHand = MultiSet.removeSingle id hand
-                        //Add tile to acc
-                        let newAcc = (coord, (id, (cv, pv))) :: acc
-                        //Check if better than current best
-                        let newBest = if b then bestWord best' acc else best'
-                        aux newBest newAcc (nextCoord coord dir) newHand child
+                    match MultiSet.containsValue id hand with
+                        |true -> 
+                            match step cv dict with
+                            //Cant step, use best'
+                            | None -> best'
+                            //can step
+                            | Some (b, child) ->
+                                //Remove said tile from hand for next recursive call
+                                //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
+                                let newHand = MultiSet.removeSingle id hand
+                                //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
+                                //Add tile to acc
+                                let newAcc = List.append acc [(coord, (id, (cv, pv)))]
+                                //Check if better than current best
+                                let newBest = if b then bestWord best' newAcc else best'
+                                aux newBest newAcc (nextCoord coord dir) newHand child
+                        |false -> best'
                     ) best hand
         aux [] [] c st.hand st.dict
     
@@ -164,64 +169,39 @@ module Scrabble =
     //Playgame is called at start. St is the players state, which must be updated based on what
     //happens, what is played, etc
     
-        let rec aux (st : State.state) =
-            
-            let calculateMove (currentState: state) (lastMove: (coord * (uint32 * (char * int))) list) (dict: Dict)=
-                let playerHand = currentState.hand
-                let tilesOnBoard = currentState.tilesOnBoard
-                // Husk også at få fat i koordinater somehow.
-                // Hvis man starter med at spille, starter man på 0,0
-                // Hvis man ikke starter, så skal funktionen have den koordinat på den tile
-                // man starter med at bygge, med i funktionen. Man skal også huske at
-                // så plusse / minusse x,y koordinaterne efter hvilken retning man går
-                // (TA'en nævnte at de havde en direction variabel eller sådan noget)
-
-                let rec checkmove hand lastmove =
-                    List.fold (fun acc (_, (_, (character, _))) ->
-                        let isWord = step character dict
-                        match isWord with
-                        | Some (_, d) ->
-                            let rec aux = 
-                                (MultiSet.fold (fun acc2 key amount ->
-                                    let actualTile = Map.find key pieces
-                                    let isWord = step actualTile d
-                                    let tempCharacterList = MultiSet.removeSingle key hand
-                                    match isWord with
-                                    |Some (true, d) -> acc2
-                                    |Some (false, d) -> acc2 @ aux
-                                    |_ -> aux
-                            ) List.empty hand)
-                            aux
-                        ) [] lastmove
-                
-                (*let rec checkmove hand =
-                    MultiSet.fold
-                        (fun acc key amount->
-                            (let actualTile = Map.find key pieces
-                             let isWord = step actualTile dict
-                             let tempCharacterList = MultiSet.removeSingle key hand
-                             match isWord with
-                             |Some (true, d) -> acc
-                             |Some (false, d) -> acc @ (checkmove tempCharacterList)
-                             |_ -> checkmove tempCharacterList
-                             )
-                        )
-                        List.empty hand*)
-                
-                checkmove playerHand lastMove
-            
-                    
-                
-                
-                
+        let rec aux (st : State.state) =      
             //Aux is called again and again
             Print.printHand pieces (State.hand st)
 
             // remove the force print when you move on from manual input (or when you have learnt the format)
             forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
-            let input =  System.Console.ReadLine()
-            let move = RegEx.parseMove input
-
+            
+            //let input =  System.Console.ReadLine()
+            //let move = RegEx.parseMove input
+            let move =
+                match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
+                |Some(coord) -> moveFromCoord coord Right st
+                |None -> moveFromCoord (0,0) Right st
+                
+            let move = match lookup (placedWordToWord move) st.dict with
+                        |true -> move
+                        |false ->
+                            match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
+                                |Some(coord) -> moveFromCoord coord Down st
+                                |None -> moveFromCoord (0,0) Down st
+            
+            let move = match lookup (placedWordToWord move) st.dict with
+                        |true -> move
+                        |false -> []
+            
+            
+            
+            //let move = moveFromCoord (0,0) Right st
+            
+            
+            //let move = moveFromCoord (0,0) Right st
+            //forcePrint (sprintf "\n ####  In hands :   %A ####\n" st.hand)
+            //forcePrint (sprintf "\n ####  Attempted move :  %A ####\n" move)
             debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
             send cstream (SMPlay move)
 
@@ -250,7 +230,7 @@ module Scrabble =
                 aux st'
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
-            | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
+            | RGPE err -> printfn "Gameplay Error: %A\n" err; aux st
 
 
         aux st
