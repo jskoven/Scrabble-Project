@@ -83,6 +83,8 @@ module Scrabble =
         if playerTurn+1u > nrOfPlayers
             then 1u
             else playerTurn+1u
+            
+            //(pid % numPlayers + 1 = myNUmber)
     open State
     open Dictionary
     //open MultiSet
@@ -101,7 +103,7 @@ module Scrabble =
         match direction with
         |Right -> (x-1,y)
         |Down -> (x, y-1)  
-    let checkAdjecent (x,y) (tiles: Map<coord, placedTile>) dir =
+    (*let checkAdjecent (x,y) (tiles: Map<coord, placedTile>) dir =
         match dir with
         |Right -> 
             match Map.tryFind (x-1,y) tiles with
@@ -116,13 +118,14 @@ module Scrabble =
             | None ->
                 match Map.tryFind (x,y+1) tiles with
                 | Some (cv, pv) -> true
-                | None -> false
+                | None -> false*)
 
     let rec findLeftMostTile (x,y) (tiles: Map<coord, placedTile>) =
         match Map.tryFind (x-1,y) tiles with
         | Some (cv, pv) -> findLeftMostTile (x-1,y) tiles
         | None -> (x+1,y)
-        
+    
+    
     let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar=
         //Need to add original tile that we are "checking from" in here as well.
         match (x,y) with
@@ -143,6 +146,28 @@ module Scrabble =
     let rec placedWordToWord (placeWord: (coord * (uint32 * (char * int))) list) =
         List.fold (fun acc (_,(_,(c,_))) -> acc + (string c)) "" placeWord
 
+    let checkAdjecent st dir (x,y) =
+        match dir with
+        |Right ->
+            match Map.tryFind (x+1,y) st with
+            |Some(cv,pv) -> true
+            |_ ->
+                match Map.tryFind (x,y-1) st with
+                |Some (cv, pv) -> true
+                |_ ->
+                    match Map.tryFind (x,y+1) st with
+                    |Some (cv, pv) -> true
+                    |_ -> false
+        |Down ->
+            match Map.tryFind (x-1,y) st with
+            |Some(cv,pv) -> true
+            |_ ->
+                match Map.tryFind (x+1,y) st with
+                |Some(cv, pv ) -> true
+                |_ ->
+                    match Map.tryFind (x,y+1) st with
+                    |Some (cv, pv) -> true
+                    |_ -> false
     
     let bestWord word1 word2 =
         if List.length word1 > List.length word2 then word1 else word2
@@ -168,26 +193,27 @@ module Scrabble =
                 MultiSet.fold (fun best' id _ ->
                     // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
                     let (cv, pv) = Map.find id st.tiles |> Set.minElement
-              
+                    let isAdjecent = checkAdjecent st.tilesOnBoard dir coord
+                    if isAdjecent then best' else
                     // Todo: se om vi kan ligge den brik på det omvendte led
                     //Check if we can step with each of our tiles in hand
-                    match MultiSet.containsValue id hand with
-                        |true -> 
-                            match step cv dict with
-                            //Cant step, use best'
-                            | None -> best'
-                            //can step
-                            | Some (b, child) ->
-                                //Remove said tile from hand for next recursive call
-                                //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
-                                let newHand = MultiSet.removeSingle id hand
-                                //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
-                                //Add tile to acc
-                                let newAcc = List.append acc [(coord, (id, (cv, pv)))]
-                                //Check if better than current best
-                                let newBest = if b then bestWord best' newAcc else best'
-                                aux newBest newAcc (nextCoord coord dir) newHand child
-                        |false -> best'
+                        match MultiSet.containsValue id hand with
+                            |true -> 
+                                match step cv dict with
+                                //Cant step, use best'
+                                | None -> best'
+                                //can step
+                                | Some (b, child) ->
+                                    //Remove said tile from hand for next recursive call
+                                    //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
+                                    let newHand = MultiSet.removeSingle id hand
+                                    //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
+                                    //Add tile to acc
+                                    let newAcc = List.append acc [(coord, (id, (cv, pv)))]
+                                    //Check if better than current best
+                                    let newBest = if b then bestWord best' newAcc else best'
+                                    aux newBest newAcc (nextCoord coord dir) newHand child
+                            |false -> best'
                     ) best hand
         aux [] [] c st.hand st.dict
     
@@ -203,24 +229,51 @@ module Scrabble =
                 DebugPrint.forcePrint (sprintf "player %A's turn\n" st.playerNumber) 
                 //Aux is called again and again
                 Print.printHand pieces (State.hand st)
+                
+                if Map.isEmpty st.tilesOnBoard then
+                    let moveRight = moveFromCoord (0,0) Right st
+                    let moveDown = moveFromCoord (0,0) Down st
+                    let move = bestWord moveRight moveDown
+                    
+                    match move with
+                        | [] -> send cstream (SMPass)
+                        //| [] -> send cstream (SMChange (MultiSet.toList st.hand))
+                        | _ -> send cstream (SMPlay move)
+                    
+                    debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move)
+
+                else
+                    let moveRight = Map.fold (fun best coord _  ->
+                        bestWord (moveFromCoord coord Right st) (best) ) [] st.tilesOnBoard
+                    
+                    let moveDown = Map.fold (fun best coord _  ->
+                        bestWord (moveFromCoord coord Down st) (best) ) [] st.tilesOnBoard
+                    
+                    let move = bestWord moveRight moveDown
+                    
+                    match move with
+                        | [] -> send cstream (SMPass)
+                        //| [] -> send cstream (SMChange (MultiSet.toList st.hand))
+                        | _ -> send cstream (SMPlay move)
+                    
+                    debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move)
+
 
                 
-                let moveRight =
+                (*let moveRight =
                     match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
                     |Some(coord) -> moveFromCoord coord Right st
-                    |None -> moveFromCoord (0,0) Right st
+                    |None -> moveFromCoord (0,0) Right st*)
                     
-                let moveDown =
+                (*let moveDown =
                     match Map.fold (fun _ coord _ -> Some(coord)) None st.tilesOnBoard with
                     |Some(coord) -> moveFromCoord coord Down st
-                    |None -> moveFromCoord (0,0) Down st
+                    |None -> moveFromCoord (0,0) Down st*)
                 
-                let move = bestWord moveRight moveDown
 
-                debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
-                send cstream (SMPlay move)
+                 // keep the debug lines. They are useful.
             // remove the force print when you move on from manual input (or when you have learnt the format)
-            forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
+           // forcePrint "Input move (format '(<x-coordinate> <y-coordinate> <piece id><character><point-value> )*', note the absence of space between the last inputs)\n\n"
             
             //let input =  System.Console.ReadLine()
             //let move = RegEx.parseMove input
@@ -252,6 +305,17 @@ module Scrabble =
                 printfn "Your points are:%A" newPoints 
                 let st' = {st with hand = newHand; tilesOnBoard = newBoard; myPoints = newPoints; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers }
                 aux st'
+            | RCM (CMPassed (pid)) ->
+                //if (pid = st.playerNumber)
+                let st' = {st with playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
+                aux st'
+            | RCM (CMChange (_,_)) ->
+                let st' = {st with playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
+                aux st'
+            | RCM (CMChangeSuccess (newPieces)) ->
+                let newHand = MultiSet.empty |> addPieces newPieces
+                let st' = {st with hand = newHand; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
+                aux st'
             | RCM (CMPlayed (pid, ms, points)) ->
                 (* Successful play by other player. Update your state *)
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
@@ -262,6 +326,7 @@ module Scrabble =
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
                 let st' = {st with tilesOnBoard = newBoard; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
                 aux st'
+            
             | RCM (CMGameOver _) -> ()
             | RCM a -> failwith (sprintf "not implmented: %A" a)
             | RGPE err -> printfn "Gameplay Error:\n%A" err; aux st
