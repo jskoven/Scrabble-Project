@@ -211,8 +211,11 @@ module Scrabble =
         | Some (cv, pv) -> findTopMostTile (x, y-1) tiles st originalCoord originalChar
         | None -> isExtendedWord (x, y+1) tiles st.dict originalCoord originalChar Down
      
-    let bestWord word1 word2 =
-        if List.length word1 > List.length word2 then word1 else word2
+    let bestWord (word1:(coord * (uint32 * placedTile)) list) (word2:(coord * (uint32 * placedTile)) list) =
+        let word1Points = List.fold (fun acc (_,(_,(cv,pv))) -> acc+pv) 0 word1
+        let word2Points = List.fold (fun acc (_,(_,(cv,pv))) -> acc+pv) 0 word2
+        if word1Points > word2Points then word1 else word2
+        
     let moveFromCoord c dir (st : state) =
         let rec aux best acc coord hand dict =
             //Tryfind on the coord with tilesonboard
