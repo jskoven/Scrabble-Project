@@ -104,42 +104,6 @@ module Scrabble =
         match direction with
         |Right -> (x-1,y)
         |Down -> (x, y-1)  
-    (*let checkAdjecent (x,y) (tiles: Map<coord, placedTile>) dir =
-        match dir with
-        |Right -> 
-            match Map.tryFind (x-1,y) tiles with
-            | Some (cv, pv) -> true
-            | None ->
-                match Map.tryFind (x+1,y) tiles with
-                | Some (cv, pv) -> true
-                | None -> false
-        |Down ->
-            match Map.tryFind (x,y-1) tiles with
-            | Some (cv, pv) -> true
-            | None ->
-                match Map.tryFind (x,y+1) tiles with
-                | Some (cv, pv) -> true
-                | None -> false*)
-
-  
-    
-    
-    let rec isHorizontalLineWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar=
-        //Need to add original tile that we are "checking from" in here as well.
-        match (x,y) with
-        |(x,y) when (x,y) = originalCoord ->
-            match step originalChar dict with
-                | None -> false
-                | Some (b, child) ->
-                    isHorizontalLineWord (x+1,y) tiles child originalCoord originalChar
-        |(_,_) ->
-            match Map.tryFind (x,y) tiles with
-            | Some (cv, pv) ->
-                match step cv dict with
-                | None -> false
-                | Some (b, child) ->
-                    isHorizontalLineWord (x+1,y) tiles child originalCoord originalChar
-            | None -> true
 
     let rec placedWordToWord (placeWord: (coord * (uint32 * (char * int))) list) =
         List.fold (fun acc (_,(_,(c,_))) -> acc + (string c)) "" placeWord
@@ -166,51 +130,143 @@ module Scrabble =
                     match Map.tryFind (x,y+1) st with
                     |Some (cv, pv) -> true
                     |_ -> false
-   
-    let rec isExtendedWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar (direction:direction)=
-        //Need to add original tile that we are "checking from" in here as well.
-        match direction with
-        | Right ->
-            match (x,y) with
-            |(x,y) when (x,y) = originalCoord ->
-                match step originalChar dict with
-                    | None -> false
-                    | Some (b, child) ->
-                        isExtendedWord (x+1,y) tiles child originalCoord originalChar direction
-            |(_,_) ->
-                match Map.tryFind (x,y) tiles with
-                | Some (cv, pv) ->
-                    match step cv dict with
-                    | None -> false
-                    | Some (b, child) ->
-                        isExtendedWord (x+1,y) tiles child originalCoord originalChar direction
-                | None -> true
-        | Down ->
-            match (x,y) with
-            |(x,y) when (x,y) = originalCoord ->
-                match step originalChar dict with
-                    | None -> false
-                    | Some (b, child) ->
-                        isExtendedWord (x,y+1) tiles child originalCoord originalChar direction
-            |(_,_) ->
-                match Map.tryFind (x,y) tiles with
-                | Some (cv, pv) ->
-                    match step cv dict with
-                    | None -> false
-                    | Some (b, child) ->
-                        isExtendedWord (x,y+1) tiles child originalCoord originalChar direction
-                | None -> true
+  
+    let isHorizontallyAdjecent st (x,y) dir =
+        match dir with
+        |Right -> 
+            match Map.tryFind (nextCoord (x,y) Right) st.tilesOnBoard with
+                |Some(cv,pv) -> true
+                |_ -> false
+        |Down ->
+            match Map.tryFind (nextCoord (x,y) Right) st.tilesOnBoard with
+            | Some(cv,pv) -> true
+            |_ ->
+                match Map.tryFind (prevCoord (x,y) Right) st.tilesOnBoard with
+                |Some(cv,pv) -> true
+                |_ -> false
     
-    let rec findLeftMostTile (x,y) (tiles: Map<coord, placedTile>) (st: state) originalCoord originalChar =
-        match Map.tryFind (x-1,y) tiles with
-        | Some (cv, pv) -> findLeftMostTile (x-1,y) tiles st originalCoord originalChar
-        | None -> isExtendedWord (x+1,y) tiles st.dict originalCoord originalChar Right
+    let isVerticallyAdjecent st (x,y) dir =
+        match dir with
+        |Right ->
+            match Map.tryFind (nextCoord (x,y) Down) st.tilesOnBoard with
+            | Some(cv,pv) -> true
+            |_ ->
+                match Map.tryFind (prevCoord(x,y) Down) st.tilesOnBoard with
+                |Some(cv,pv) -> true
+                |_ -> false
+        |Down ->
+            match Map.tryFind (nextCoord (x,y) Down) st.tilesOnBoard with
+                |Some(cv,pv) -> true
+                |_ -> false
+                    
         
-    let rec findTopMostTile (x, y) (tiles: Map<coord, placedTile>) (st: state) originalCoord originalChar =
-        match Map.tryFind (x, y-1) tiles with
-        | Some (cv, pv) -> findTopMostTile (x, y-1) tiles st originalCoord originalChar
-        | None -> isExtendedWord (x, y+1) tiles st.dict originalCoord originalChar Down
-     
+    let rec findLeftMostTile (x,y) st =
+        match Map.tryFind (prevCoord (x,y) Right) st.tilesOnBoard with
+        |Some(cv,pv) -> findLeftMostTile (prevCoord (x,y) Right) st
+        |None -> (x,y)
+    
+    let rec findTopMostTile (x,y) st =
+        match Map.tryFind (prevCoord(x,y) Down) st.tilesOnBoard with
+        |Some(cv,pv) -> findLeftMostTile (prevCoord(x,y) Down) st
+        |None -> (x,y)
+    
+    let rec isHorizontalLineWord (x,y) st (oX,oY) originalChar dict =
+        match (x,y) with
+        | (x,y) when (x,y) = (oX, oY) ->
+            match step originalChar dict with
+            |None -> false
+            |Some (true, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> true
+                    |Some (cv, pv) -> isHorizontalLineWord (x, y-1) st (oX, oY) originalChar child
+            |Some (false, child) ->
+                match Map.tryFind (x,y-1) st.tilesOnBoard with
+                |None -> false
+                |Some (cv, pv) -> isHorizontalLineWord (x, y-1) st (oX, oY) originalChar child
+        | (_,_) ->
+            match Map.tryFind (x,y) st.tilesOnBoard with
+            |Some (cv, pv) ->
+                match step cv dict with
+                |None -> false
+                |Some (true, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> true
+                    |Some (cv, pv) -> isHorizontalLineWord (x, y-1) st (oX, oY) originalChar child
+                |Some (false, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> false
+                    |Some (cv, pv) -> isHorizontalLineWord (x, y-1) st (oX, oY) originalChar child
+            |None -> true
+            
+            
+    let rec isVerticalLineWord (x,y) st (oX,oY) originalChar dict =
+        match (x,y) with
+        | (x,y) when (x,y) = (oX, oY) ->
+            match step originalChar dict with
+            |None -> false
+            |Some (true, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> true
+                    |Some (cv, pv) -> isVerticalLineWord (x, y-1) st (oX, oY) originalChar child
+            |Some (false, child) ->
+                match Map.tryFind (x,y-1) st.tilesOnBoard with
+                |None -> false
+                |Some (cv, pv) -> isVerticalLineWord (x, y-1) st (oX, oY) originalChar child
+        | (_,_) ->
+            match Map.tryFind (x,y) st.tilesOnBoard with
+            |Some (cv, pv) ->
+                match step cv dict with
+                |None -> false
+                |Some (true, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> true
+                    |Some (cv, pv) -> isVerticalLineWord (x, y-1) st (oX, oY) originalChar child
+                |Some (false, child) ->
+                    match Map.tryFind (x,y-1) st.tilesOnBoard with
+                    |None -> false
+                    |Some (cv, pv) -> isVerticalLineWord (x, y-1) st (oX, oY) originalChar child
+            |None -> true
+    
+    let CheckIfAllowed (x,y) (st:state) dir originalChar=
+        match isHorizontallyAdjecent st (x,y) dir with
+        |true ->
+            let leftmost = findLeftMostTile (x,y) st
+            match isHorizontalLineWord leftmost st (x,y) originalChar st.dict with
+            |false -> false
+            |true ->
+                match isVerticallyAdjecent st (x,y) dir with
+                |true ->
+                    let topMost = findTopMostTile (x,y) st
+                    match isVerticalLineWord topMost st (x,y) originalChar st.dict with
+                    |false -> false
+                    |true -> true
+                |false -> true
+        |false ->
+            match isVerticallyAdjecent st (x,y) dir with
+            |true -> 
+                let topMost = findTopMostTile (x,y) st
+                match isVerticalLineWord topMost st (x,y) originalChar st.dict with
+                |false -> false
+                |true -> true
+            |false -> true
+
+    let CheckIfAllowed2 (x,y) (st:state) dir originalChar=
+        match isHorizontallyAdjecent st (x,y) dir with
+        |true ->
+            let leftmost = findLeftMostTile (x,y) st
+            match isHorizontalLineWord leftmost st (x,y) originalChar st.dict with
+            |false -> false
+            |true ->
+                match isVerticallyAdjecent st (x,y) dir with
+                |true -> false
+                |false -> true
+        |false ->
+            match isVerticallyAdjecent st (x,y) dir with
+            |true -> false
+            |false -> true
+        
+
+    
     let bestWord word1 word2 =
         if List.length word1 > List.length word2 then word1 else word2
     let moveFromCoord c dir (st : state) =
@@ -236,7 +292,7 @@ module Scrabble =
                     // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
                     let (cv, pv) = Map.find id st.tiles |> Set.minElement
                     let isAdjecent = checkAdjecent st.tilesOnBoard dir coord
-                    if isAdjecent then best' else
+                    if not (CheckIfAllowed (coord) st dir cv) then best' else
                     // Todo: se om vi kan ligge den brik på det omvendte led
                     //Check if we can step with each of our tiles in hand
                         match MultiSet.containsValue id hand with
