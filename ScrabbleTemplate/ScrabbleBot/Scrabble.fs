@@ -384,7 +384,8 @@ module Scrabble =
                       player id = %d
                       player turn = %d
                       hand =  %A
-                      timeout = %A\n\n" numPlayers playerNumber playerTurn hand timeout)
+                      timeout = %A\n\n
+                      board = %A\n\n" numPlayers playerNumber playerTurn hand timeout boardP)
 
         //let dict = dictf true // Uncomment if using a gaddag for your dictionary
         let dict = dictf false // Uncomment if using a trie for your dictionary

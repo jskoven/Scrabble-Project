@@ -8,7 +8,8 @@ module internal StateMonad
         | VarNotFound of string
         | IndexOutOfBounds of int
         | DivisionByZero 
-        | ReservedName of string           
+        | ReservedName of string
+        | EmptyState
 
     type Result<'a, 'b>  =
         | Success of 'a
@@ -70,5 +71,25 @@ module internal StateMonad
               | Some v -> Success (v, s)
               | None   -> Failure (VarNotFound x))
 
-    let declare (var : string) : SM<unit> = failwith "Not implemented"   
-    let update (var : string) (value : int) : SM<unit> = failwith "Not implemented"      
+    let declare (var : string) : SM<unit> =
+        S (fun s ->
+            match var with
+            | _ when s.vars.IsEmpty -> Failure (EmptyState)
+            | _ when s.reserved.Contains var -> Failure (ReservedName var)
+            | _ when s.vars.[0].ContainsKey var -> Failure (VarExists var)
+            | _ -> Success ((), {s with vars = (s.vars.[0].Add (var, 0)) :: s.vars.Tail}))
+    
+    let update (var : string) (value : int) : SM<unit> =
+        let rec aux i =
+            function
+                | [] -> None
+                | m :: ms  ->
+                    match Map.tryFind var m with
+                    | Some _ -> Some i //We just needed to find the index, not the actual value here
+                    | None -> aux (i+1) ms
+        
+        
+        S (fun s ->
+            match aux 0 s.vars with
+            | Some index -> Success ((),  {s with vars = (List.mapi (fun mappedIndex (map: Map<string,int>) -> if mappedIndex = index then map.Add (var, value) else map) s.vars)}) //We simply need to find the index where the map is and then use the Add function to actually update the value of the var
+            | None -> Failure (VarNotFound var))      
