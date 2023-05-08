@@ -1,6 +1,7 @@
 ﻿namespace JohnBuks
 
 open System
+open System.Diagnostics
 open Eval
 open ScrabbleBot
 open ScrabbleBot.Types
@@ -87,11 +88,10 @@ module Scrabble =
         if playerTurn+1u > nrOfPlayers
             then 1u
             else playerTurn+1u
-            
-            //(pid % numPlayers + 1 = myNUmber)
+
     open State
     open Dictionary
-    //open MultiSet
+    
     
     
     type direction =
@@ -107,22 +107,6 @@ module Scrabble =
         match direction with
         |Right -> (x-1,y)
         |Down -> (x, y-1)  
-    (*let checkAdjecent (x,y) (tiles: Map<coord, placedTile>) dir =
-        match dir with
-        |Right -> 
-            match Map.tryFind (x-1,y) tiles with
-            | Some (cv, pv) -> true
-            | None ->
-                match Map.tryFind (x+1,y) tiles with
-                | Some (cv, pv) -> true
-                | None -> false
-        |Down ->
-            match Map.tryFind (x,y-1) tiles with
-            | Some (cv, pv) -> true
-            | None ->
-                match Map.tryFind (x,y+1) tiles with
-                | Some (cv, pv) -> true
-                | None -> false*)
 
   
     
@@ -150,25 +134,20 @@ module Scrabble =
     let checkAdjecent st dir (x,y) =
         match dir with
         |Right ->
-            match Map.tryFind (x+1,y) st with
-            |Some(cv,pv) -> true
+            match Map.tryFind (x,y-1) st with
+            |Some (cv, pv) -> true
             |_ ->
-                match Map.tryFind (x,y-1) st with
+                match Map.tryFind (x,y+1) st with
                 |Some (cv, pv) -> true
-                |_ ->
-                    match Map.tryFind (x,y+1) st with
-                    |Some (cv, pv) -> true
-                    |_ -> false
+                |_ -> false
         |Down ->
             match Map.tryFind (x-1,y) st with
             |Some(cv,pv) -> true
             |_ ->
                 match Map.tryFind (x+1,y) st with
                 |Some(cv, pv ) -> true
-                |_ ->
-                    match Map.tryFind (x,y+1) st with
-                    |Some (cv, pv) -> true
-                    |_ -> false
+                |_ -> false
+                    
    
     let rec isExtendedWord (x,y) (tiles: Map<coord, placedTile>) (dict: Dict) originalCoord originalChar (direction:direction)=
         //Need to add original tile that we are "checking from" in here as well.
@@ -219,13 +198,38 @@ module Scrabble =
         let word2Points = List.fold (fun acc (_,(_,(cv,pv))) -> acc+pv) 0 word2
         if word1Points > word2Points then word1 else word2
         
-    let moveFromCoord c dir (st : state) =
         
+    let rec updateAnchorPointsAux (i: int) (x,y) (listOfCoords: coord Set) (st:state) dir =
+        match dir with
+        | Right ->
+            match i with
+            | i when i = ((MultiSet.size st.hand) |> int) -> listOfCoords
+            | _ -> updateAnchorPointsAux (i+1) (x-1,y) (Set.add (x, y) listOfCoords) st dir
+        |Down ->
+            match i with
+            | i when i = ((MultiSet.size st.hand) |> int) -> listOfCoords
+            | _ -> updateAnchorPointsAux (i+1) (x,y-1) (Set.add (x, y) listOfCoords) st dir
+    
+    let updateAnchorPoints (st: state) dir =
+        Map.fold (fun acc key _ -> (updateAnchorPointsAux 0 key acc st dir)) Set.empty st.tilesOnBoard
+    
+    let isNextTileEmpty (x,y) (st:state) dir =
+        match Map.tryFind (nextCoord (x,y) dir) st.tilesOnBoard  with
+        |Some (cv,pv) -> false
+        |None -> true
+       
+       
+    let isPrevTileEmpty (x,y) (st:state) dir =
+        match Map.tryFind (prevCoord (x,y) dir) st.tilesOnBoard  with
+        |Some (cv, pv) -> false
+        |None -> true
+    
+    let moveFromCoord c dir (st : state) =
         let outsideBoard coord =
             match (st.board.squares coord) with
             | Success map -> map |> Option.map (fun _ -> false) |> Option.defaultValue true
                        
-        let rec aux best acc coord hand dict =
+        let rec aux best acc coord hand dict isIntersecting =
             if outsideBoard coord then best else    
                 //Tryfind on the coord with tilesonboard
                 match Map.tryFind coord st.tilesOnBoard with
@@ -240,8 +244,7 @@ module Scrabble =
                             | None -> best
                         //Can, check if it's a word. If it is, check if better than current best word.
                             | Some (b, child) ->
-                                let newBest = if b then bestWord best acc else best
-                                aux newBest acc (nextCoord coord dir) hand child
+                                aux best acc (nextCoord coord dir) hand child true
                 //No tile present, fold over hand
                 | None ->
                     MultiSet.fold (fun best' id _ ->
@@ -265,11 +268,18 @@ module Scrabble =
                                         //Add tile to acc
                                         let newAcc = List.append acc [(coord, (id, (cv, pv)))]
                                         //Check if better than current best
-                                        let newBest = if b then bestWord best' newAcc else best'
-                                        aux newBest newAcc (nextCoord coord dir) newHand child
+                                        let nextTileEmpty = isNextTileEmpty coord st dir
+                                        let newBest = if (b && isIntersecting && nextTileEmpty)
+                                                      then bestWord best' newAcc
+                                                      else best'
+                                        aux newBest newAcc (nextCoord coord dir) newHand child isIntersecting
                                 |false -> best'
                         ) best hand
-        aux [] [] c st.hand st.dict
+        let isFirstMove = c = st.board.center
+        if (isPrevTileEmpty c st dir)
+        then
+            aux [] [] c st.hand st.dict isFirstMove
+        else []
     
     
     let getIDs (word: placedWord) =
@@ -300,17 +310,19 @@ module Scrabble =
                     debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move)
 
                 else
-                    let moveRight = Map.fold (fun best coord _  ->
-                        bestWord (moveFromCoord coord Right st) (best) ) [] st.tilesOnBoard
+                    let anchorPointsRight = updateAnchorPoints st Right
+                    let moveRight = Set.fold (fun best coord  ->
+                        bestWord (moveFromCoord coord Right st) (best) ) [] anchorPointsRight
                     
-                    let moveDown = Map.fold (fun best coord _  ->
-                        bestWord (moveFromCoord coord Down st) (best) ) [] st.tilesOnBoard
+                    let anchorPointsDown = updateAnchorPoints st Down
+                    let moveDown = Set.fold (fun best coord ->
+                        bestWord (moveFromCoord coord Down st) (best) ) [] anchorPointsDown
                     
                     let move = bestWord moveRight moveDown
                     debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
 
                     
-                    match move with
+                    (*match move with
                         | [] ->
                             if st.isServerOutOfTiles then
                                 debugPrint (sprintf "Player: %A : server out of tiles, passing" st.playerNumber)
@@ -318,8 +330,13 @@ module Scrabble =
                             else
                                 debugPrint (sprintf "Player: %A : Nothing to play, swapping tiles" st.playerNumber)
                                 send cstream (SMChange [List.head (MultiSet.toList st.hand)])
-                        | _ -> send cstream (SMPlay move)
+                        | _ -> send cstream (SMPlay move)*)
                     
+                    match move with
+                        | [] ->
+                            debugPrint (sprintf "Player: %A : server out of tiles, passing" st.playerNumber)
+                            send cstream (SMPass)
+                        | _ -> send cstream (SMPlay move)
                     debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move)
 
                  // keep the debug lines. They are useful.
@@ -335,8 +352,7 @@ module Scrabble =
                 let newHand = removePieces (getIDs ms) st.hand |> addPieces newPieces
                 let newBoard = updateTilesOnBoard st.tilesOnBoard ms
                 
-                let newPoints = st.myPoints + uint32 points
-                printfn "Your points are:%A" newPoints 
+                let newPoints = st.myPoints + uint32 points 
                 let st' = {st with hand = newHand; tilesOnBoard = newBoard; myPoints = newPoints; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers }
                 aux st'
             | RCM (CMPassed (pid)) ->
@@ -345,9 +361,11 @@ module Scrabble =
                 aux st'
             | RCM (CMChange (_,_)) ->
                 //debugPrint (sprintf)
+                debugPrint "CMCHange recieved \n"
                 let st' = {st with playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
                 aux st'
             | RCM (CMChangeSuccess (newPieces)) ->
+                debugPrint "CMChangeSucess recieved \n"
                 let newHand = MultiSet.empty |> addPieces newPieces
                 let st' = {st with hand = newHand; playerTurn = updatePlayerTurn st.playerTurn st.nrOfPlayers}
                 aux st'
@@ -367,10 +385,11 @@ module Scrabble =
             | RGPE err ->
                 let error = sprintf "Gameplay Error:\n%A" err
                 if error.Contains "GPENotEnoughPieces" then
-                    let st' = {st with isServerOutOfTiles = true}
+                    let st' = {st with isServerOutOfTiles = true; playerTurn = updatePlayerTurn st.playerTurn st.playerNumber}
                     aux st'
                 else
-                    printfn "Gameplay Error:\n%A" err; aux st
+                    let st' = {st with playerTurn = updatePlayerTurn st.playerTurn st.playerNumber }
+                    aux st'
 
 
         aux st
