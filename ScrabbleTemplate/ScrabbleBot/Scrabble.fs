@@ -136,7 +136,10 @@ module Scrabble =
         |Right -> 
             match Map.tryFind (nextCoord (x,y) Right) st.tilesOnBoard with
                 |Some(cv,pv) -> true
-                |_ -> false
+                |_ ->
+                    match Map.tryFind (prevCoord (x,y) Right) st.tilesOnBoard with
+                    |Some(cv,pv) -> true
+                    |_ -> false
         |Down ->
             match Map.tryFind (nextCoord (x,y) Right) st.tilesOnBoard with
             | Some(cv,pv) -> true
@@ -144,6 +147,9 @@ module Scrabble =
                 match Map.tryFind (prevCoord (x,y) Right) st.tilesOnBoard with
                 |Some(cv,pv) -> true
                 |_ -> false
+    
+
+        
     
     let isVerticallyAdjecent st (x,y) dir =
         match dir with
@@ -157,7 +163,10 @@ module Scrabble =
         |Down ->
             match Map.tryFind (nextCoord (x,y) Down) st.tilesOnBoard with
                 |Some(cv,pv) -> true
-                |_ -> false
+                |_ ->
+                    match Map.tryFind (prevCoord (x,y) Down) st.tilesOnBoard with
+                        |Some(cv,pv) -> true
+                        |_ -> false
                     
         
     let rec findLeftMostTile (x,y) st =
@@ -250,23 +259,6 @@ module Scrabble =
                 |true -> true
             |false -> true
 
-    let CheckIfAllowed2 (x,y) (st:state) dir originalChar=
-        match isHorizontallyAdjecent st (x,y) dir with
-        |true ->
-            let leftmost = findLeftMostTile (x,y) st
-            match isHorizontalLineWord leftmost st (x,y) originalChar st.dict with
-            |false -> false
-            |true ->
-                match isVerticallyAdjecent st (x,y) dir with
-                |true -> false
-                |false -> true
-        |false ->
-            match isVerticallyAdjecent st (x,y) dir with
-            |true -> false
-            |false -> true
-        
-
-    
     let bestWord word1 word2 =
         if List.length word1 > List.length word2 then word1 else word2
     let moveFromCoord c dir (st : state) =
@@ -275,17 +267,18 @@ module Scrabble =
             match Map.tryFind coord st.tilesOnBoard with
             //A tile is there
             | Some (cv, pv) ->
-                match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
-                |Some (cv,pv) -> best
-                |None -> 
-                    //See if we can step further in our dict with that tile
-                    match step cv dict with
-                    //Cant, return best (?)
-                        | None -> best
-                    //Can, check if it's a word. If it is, check if better than current best word.
-                        | Some (b, child) ->
-                            let newBest = if b then bestWord best acc else best
-                            aux newBest acc (nextCoord coord dir) hand child
+                if not (CheckIfAllowed (coord) st dir cv) then best else
+                    match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
+                    |Some (cv,pv) -> best
+                    |None -> 
+                        //See if we can step further in our dict with that tile
+                        match step cv dict with
+                        //Cant, return best (?)
+                            | None -> best
+                        //Can, check if it's a word. If it is, check if better than current best word.
+                            | Some (b, child) ->
+                                let newBest = if b then bestWord best acc else best
+                                aux newBest acc (nextCoord coord dir) hand child
             //No tile present, fold over hand
             | None ->
                 MultiSet.fold (fun best' id _ ->
