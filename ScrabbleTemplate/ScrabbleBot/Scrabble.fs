@@ -219,18 +219,34 @@ module Scrabble =
         let word2Points = List.fold (fun acc (_,(_,(cv,pv))) -> acc+pv) 0 word2
         if word1Points > word2Points then word1 else word2
         
-    let moveFromCoord c dir (st : state) =
         
+    let rec updateAnchorPointsAux (i: int) (x,y) (listOfCoords: coord list) (st:state) dir =
+        match dir with
+        | Right ->
+            match i with
+            | i when i = ((MultiSet.size st.hand) |> int) -> listOfCoords
+            | _ -> updateAnchorPointsAux (i+1) (x-1,y) (List.append listOfCoords [(x-i, y)]) st dir
+        |Down ->
+            match i with
+            | i when i = ((MultiSet.size st.hand) |> int) -> listOfCoords
+            | _ -> updateAnchorPointsAux (i+1) (x,y-1) (List.append listOfCoords [(x, y-i)]) st dir
+    
+    let updateAnchorPoints (st: state) dir =
+        Map.fold (fun acc key value -> List.append acc (updateAnchorPointsAux 0 key [] st dir)) [] st.tilesOnBoard
+    
+    
+    let moveFromCoord c dir (st : state) =
         let outsideBoard coord =
             match (st.board.squares coord) with
             | Success map -> map |> Option.map (fun _ -> false) |> Option.defaultValue true
                        
-        let rec aux best acc coord hand dict =
+        let rec aux best acc coord hand dict isIntersecting =
             if outsideBoard coord then best else    
                 //Tryfind on the coord with tilesonboard
                 match Map.tryFind coord st.tilesOnBoard with
                 //A tile is there
                 | Some (cv, pv) ->
+                    let isIntersecting' = true
                     match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
                     |Some (cv,pv) -> best
                     |None -> 
@@ -241,7 +257,7 @@ module Scrabble =
                         //Can, check if it's a word. If it is, check if better than current best word.
                             | Some (b, child) ->
                                 let newBest = if b then bestWord best acc else best
-                                aux newBest acc (nextCoord coord dir) hand child
+                                aux newBest acc (nextCoord coord dir) hand child isIntersecting'
                 //No tile present, fold over hand
                 | None ->
                     MultiSet.fold (fun best' id _ ->
@@ -265,8 +281,8 @@ module Scrabble =
                                         //Add tile to acc
                                         let newAcc = List.append acc [(coord, (id, (cv, pv)))]
                                         //Check if better than current best
-                                        let newBest = if b then bestWord best' newAcc else best'
-                                        aux newBest newAcc (nextCoord coord dir) newHand child
+                                        let newBest = if (b && isIntersecting) then bestWord best' newAcc else best'
+                                        aux newBest newAcc (nextCoord coord dir) newHand child isIntersecting
                                 |false -> best'
                         ) best hand
         aux [] [] c st.hand st.dict
@@ -285,8 +301,8 @@ module Scrabble =
                 //Print.printHand pieces (State.hand st)
                 
                 if Map.isEmpty st.tilesOnBoard then
-                    let moveRight = moveFromCoord (st.board.center) Right st
-                    let moveDown = moveFromCoord (st.board.center) Down st
+                    let moveRight = moveFromCoord (st.board.center) Right st false
+                    let moveDown = moveFromCoord (st.board.center) Down st false
                     let move = bestWord moveRight moveDown
                     
                     match move with
@@ -300,11 +316,13 @@ module Scrabble =
                     debugPrint (sprintf "Player %d -> Server:\n%A\n" (State.playerNumber st) move)
 
                 else
-                    let moveRight = Map.fold (fun best coord _  ->
-                        bestWord (moveFromCoord coord Right st) (best) ) [] st.tilesOnBoard
+                    let anchorPointsRight = updateAnchorPoints st Right
+                    let moveRight = List.fold (fun best coord  ->
+                        bestWord (moveFromCoord coord Right st false) (best) ) [] anchorPointsRight
                     
-                    let moveDown = Map.fold (fun best coord _  ->
-                        bestWord (moveFromCoord coord Down st) (best) ) [] st.tilesOnBoard
+                    let anchorPointsDown = updateAnchorPoints st Down
+                    let moveDown = List.fold (fun best coord ->
+                        bestWord (moveFromCoord coord Down st false) (best) ) [] anchorPointsDown
                     
                     let move = bestWord moveRight moveDown
                     debugPrint (sprintf "Player %d <- Server:\n%A\n" (State.playerNumber st) move) // keep the debug lines. They are useful.
