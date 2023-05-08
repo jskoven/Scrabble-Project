@@ -285,8 +285,8 @@ module Scrabble =
                 //Print.printHand pieces (State.hand st)
                 
                 if Map.isEmpty st.tilesOnBoard then
-                    let moveRight = moveFromCoord (0,0) Right st
-                    let moveDown = moveFromCoord (0,0) Down st
+                    let moveRight = moveFromCoord (st.board.center) Right st
+                    let moveDown = moveFromCoord (st.board.center) Down st
                     let move = bestWord moveRight moveDown
                     
                     match move with
