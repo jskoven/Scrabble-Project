@@ -1,10 +1,13 @@
 ﻿namespace JohnBuks
 
 open System
+open Eval
 open ScrabbleBot
+open ScrabbleBot.Types
 open ScrabbleUtil
 open ScrabbleUtil.ServerCommunication
 open System.IO
+open StateMonad
 open Types
 open handCalculations
 open boardCalculations
@@ -217,49 +220,55 @@ module Scrabble =
         if word1Points > word2Points then word1 else word2
         
     let moveFromCoord c dir (st : state) =
+        
+        let outsideBoard coord =
+            match (st.board.squares coord) with
+            | Success map -> map |> Option.map (fun _ -> false) |> Option.defaultValue true
+                       
         let rec aux best acc coord hand dict =
-            //Tryfind on the coord with tilesonboard
-            match Map.tryFind coord st.tilesOnBoard with
-            //A tile is there
-            | Some (cv, pv) ->
-                match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
-                |Some (cv,pv) -> best
-                |None -> 
-                    //See if we can step further in our dict with that tile
-                    match step cv dict with
-                    //Cant, return best (?)
-                        | None -> best
-                    //Can, check if it's a word. If it is, check if better than current best word.
-                        | Some (b, child) ->
-                            let newBest = if b then bestWord best acc else best
-                            aux newBest acc (nextCoord coord dir) hand child
-            //No tile present, fold over hand
-            | None ->
-                MultiSet.fold (fun best' id _ ->
-                    // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
-                    let (cv, pv) = Map.find id st.tiles |> Set.minElement
-                    let isAdjecent = checkAdjecent st.tilesOnBoard dir coord
-                    if isAdjecent then best' else
-                    // Todo: se om vi kan ligge den brik på det omvendte led
-                    //Check if we can step with each of our tiles in hand
-                        match MultiSet.containsValue id hand with
-                            |true -> 
-                                match step cv dict with
-                                //Cant step, use best'
-                                | None -> best'
-                                //can step
-                                | Some (b, child) ->
-                                    //Remove said tile from hand for next recursive call
-                                    //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
-                                    let newHand = MultiSet.removeSingle id hand
-                                    //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
-                                    //Add tile to acc
-                                    let newAcc = List.append acc [(coord, (id, (cv, pv)))]
-                                    //Check if better than current best
-                                    let newBest = if b then bestWord best' newAcc else best'
-                                    aux newBest newAcc (nextCoord coord dir) newHand child
-                            |false -> best'
-                    ) best hand
+            if outsideBoard coord then best else    
+                //Tryfind on the coord with tilesonboard
+                match Map.tryFind coord st.tilesOnBoard with
+                //A tile is there
+                | Some (cv, pv) ->
+                    match Map.tryFind (prevCoord coord dir) st.tilesOnBoard with
+                    |Some (cv,pv) -> best
+                    |None -> 
+                        //See if we can step further in our dict with that tile
+                        match step cv dict with
+                        //Cant, return best (?)
+                            | None -> best
+                        //Can, check if it's a word. If it is, check if better than current best word.
+                            | Some (b, child) ->
+                                let newBest = if b then bestWord best acc else best
+                                aux newBest acc (nextCoord coord dir) hand child
+                //No tile present, fold over hand
+                | None ->
+                    MultiSet.fold (fun best' id _ ->
+                        // Todo maybe: fold henover hvert character istedet som et tile kan repræsenterer
+                        let (cv, pv) = Map.find id st.tiles |> Set.minElement
+                        let isAdjecent = checkAdjecent st.tilesOnBoard dir coord
+                        if isAdjecent then best' else
+                        // Todo: se om vi kan ligge den brik på det omvendte led
+                        //Check if we can step with each of our tiles in hand
+                            match MultiSet.containsValue id hand with
+                                |true -> 
+                                    match step cv dict with
+                                    //Cant step, use best'
+                                    | None -> best'
+                                    //can step
+                                    | Some (b, child) ->
+                                        //Remove said tile from hand for next recursive call
+                                        //forcePrint (sprintf "\n #### HAND BEFORE : %A \n" ( hand))
+                                        let newHand = MultiSet.removeSingle id hand
+                                        //forcePrint (sprintf "\n #### HAND  after : %A \n" (newHand))
+                                        //Add tile to acc
+                                        let newAcc = List.append acc [(coord, (id, (cv, pv)))]
+                                        //Check if better than current best
+                                        let newBest = if b then bestWord best' newAcc else best'
+                                        aux newBest newAcc (nextCoord coord dir) newHand child
+                                |false -> best'
+                        ) best hand
         aux [] [] c st.hand st.dict
     
     
